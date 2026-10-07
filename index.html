@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>할 일 목록</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f5f4;
+      --card: #ffffff;
+      --text: #1c1917;
+      --muted: #78716c;
+      --border: #e7e5e4;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --danger: #dc2626;
+      --danger-soft: #fee2e2;
+      --star: #f59e0b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1917;
+        --card: #292524;
+        --text: #f5f5f4;
+        --muted: #a8a29e;
+        --border: #44403c;
+        --accent: #60a5fa;
+        --accent-soft: #1e3a5f;
+        --danger: #f87171;
+        --danger-soft: #4c1d1d;
+        --star: #fbbf24;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 48px 16px;
+    }
+    main { width: 100%; max-width: 520px; }
+    h1 { font-size: 1.75rem; margin: 0 0 4px; }
+    .summary { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; min-height: 1.2em; }
+
+    button { font: inherit; color: inherit; cursor: pointer; }
+
+    /* 입력 폼 */
+    form {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 20px;
+    }
+    .form-row { display: flex; gap: 8px; }
+    .form-row + .form-row { margin-top: 8px; align-items: center; }
+    .text-input, .date-input {
+      padding: 10px 12px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .text-input { flex: 1; min-width: 0; }
+    .date-input { font-size: 0.9rem; padding: 6px 10px; }
+    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .add-btn {
+      padding: 0 18px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+    }
+    .star-toggle {
+      border: 1px solid var(--border);
+      background: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .star-toggle[aria-pressed="true"] { color: var(--star); border-color: var(--star); }
+
+    /* 필터 탭 */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      border: none;
+      background: none;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .clear-btn {
+      border: none;
+      background: none;
+      font-size: 0.85rem;
+      color: var(--muted);
+      padding: 6px 4px;
+    }
+    .clear-btn:hover:not(:disabled) { color: var(--danger); }
+    .clear-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* 목록 */
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    li input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+    .body { flex: 1; min-width: 0; }
+    .text { word-break: break-word; cursor: text; }
+    li.done .text { text-decoration: line-through; color: var(--muted); }
+    .edit-input {
+      width: 100%;
+      font-size: 1rem;
+      padding: 4px 6px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .due {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .due.today { color: var(--accent); font-weight: 600; }
+    .due.overdue { color: var(--danger); font-weight: 600; }
+    li.done .due { color: var(--muted); font-weight: normal; }
+
+    .icon-btn {
+      border: none;
+      background: none;
+      font-size: 1.1rem;
+      padding: 4px 6px;
+      border-radius: 6px;
+      color: var(--muted);
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .star-btn.on { color: var(--star); }
+    .delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
+
+    .empty { text-align: center; color: var(--muted); padding: 32px 0; }
+    .hint { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>할 일 목록</h1>
+    <p class="summary" id="summary"></p>
+
+    <form id="add-form">
+      <div class="form-row">
+        <input id="new-text" class="text-input" type="text" placeholder="할 일을 입력하세요" autocomplete="off" autofocus>
+        <button type="submit" class="add-btn">추가</button>
+      </div>
+      <div class="form-row">
+        <input id="new-due" class="date-input" type="date" aria-label="마감일">
+        <button type="button" id="new-star" class="star-toggle" aria-pressed="false">☆ 중요</button>
+      </div>
+    </form>
+
+    <div class="toolbar">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-filter="all" aria-selected="true">전체</button>
+        <button class="tab" role="tab" data-filter="active" aria-selected="false">진행 중</button>
+        <button class="tab" role="tab" data-filter="done" aria-selected="false">완료</button>
+      </div>
+      <button id="clear-done" class="clear-btn">완료 항목 삭제</button>
+    </div>
+
+    <ul id="list"></ul>
+    <p class="empty" id="empty"></p>
+    <p class="hint">할 일을 더블클릭하면 내용을 고칠 수 있어요.</p>
+  </main>
+
+  <script>
+    let todos = [];
+    let nextId = 1;
+    let filter = 'all';
+    let editingId = null;
+
+    const form = document.getElementById('add-form');
+    const textInput = document.getElementById('new-text');
+    const dueInput = document.getElementById('new-due');
+    const starToggle = document.getElementById('new-star');
+    const list = document.getElementById('list');
+    const empty = document.getElementById('empty');
+    const summary = document.getElementById('summary');
+    const clearBtn = document.getElementById('clear-done');
+    const tabs = document.querySelectorAll('.tab');
+
+    const EMPTY_MESSAGES = {
+      all: '할 일이 없습니다 🎉',
+      active: '진행 중인 할 일이 없어요.',
+      done: '완료한 할 일이 없어요.',
+    };
+
+    // 추가
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = textInput.value.trim();
+      if (!text) return;
+      todos.push({
+        id: nextId++,
+        text,
+        done: false,
+        due: dueInput.value || null,
+        important: starToggle.getAttribute('aria-pressed') === 'true',
+      });
+      textInput.value = '';
+      dueInput.value = '';
+      setStarToggle(false);
+      render();
+      textInput.focus();
+    });
+
+    starToggle.addEventListener('click', () => {
+      setStarToggle(starToggle.getAttribute('aria-pressed') !== 'true');
+    });
+
+    function setStarToggle(on) {
+      starToggle.setAttribute('aria-pressed', String(on));
+      starToggle.textContent = on ? '★ 중요' : '☆ 중요';
+    }
+
+    // 필터 탭
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        filter = tab.dataset.filter;
+        tabs.forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+        render();
+      });
+    });
+
+    // 완료 항목 한 번에 삭제
+    clearBtn.addEventListener('click', () => {
+      todos = todos.filter(t => !t.done);
+      render();
+    });
+
+    function update(id, changes) {
+      todos = todos.map(t => (t.id === id ? { ...t, ...changes } : t));
+      render();
+    }
+
+    function remove(id) {
+      todos = todos.filter(t => t.id !== id);
+      render();
+    }
+
+    // 날짜 표시
+    function todayString() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function describeDue(due) {
+      const today = new Date(todayString());
+      const target = new Date(due);
+      const diff = Math.round((target - today) / 86400000);
+      const [, m, d] = due.split('-').map(Number);
+      const label = `${m}월 ${d}일`;
+      if (diff < 0) return { text: `${label} · ${-diff}일 지남`, cls: 'overdue' };
+      if (diff === 0) return { text: `${label} · 오늘까지`, cls: 'today' };
+      if (diff === 1) return { text: `${label} · 내일까지`, cls: '' };
+      return { text: `${label}까지`, cls: '' };
+    }
+
+    // 수정 모드
+    function startEdit(id) {
+      editingId = id;
+      render();
+    }
+
+    function finishEdit(id, value) {
+      if (editingId !== id) return;
+      editingId = null;
+      const text = value.trim();
+      if (text) update(id, { text });
+      else render();
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      render();
+    }
+
+    function render() {
+      const visible = todos.filter(t =>
+        filter === 'all' ? true : filter === 'done' ? t.done : !t.done
+      );
+
+      list.innerHTML = '';
+      for (const todo of visible) {
+        const li = document.createElement('li');
+        if (todo.done) li.classList.add('done');
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = todo.done;
+        checkbox.setAttribute('aria-label', '완료');
+        checkbox.addEventListener('change', () => update(todo.id, { done: !todo.done }));
+
+        const star = document.createElement('button');
+        star.className = 'icon-btn star-btn' + (todo.important ? ' on' : '');
+        star.textContent = todo.important ? '★' : '☆';
+        star.setAttribute('aria-label', todo.important ? '중요 해제' : '중요 표시');
+        star.addEventListener('click', () => update(todo.id, { important: !todo.important }));
+
+        const body = document.createElement('div');
+        body.className = 'body';
+
+        if (editingId === todo.id) {
+          const edit = document.createElement('input');
+          edit.className = 'edit-input';
+          edit.value = todo.text;
+          edit.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') finishEdit(todo.id, edit.value);
+            if (e.key === 'Escape') cancelEdit();
+          });
+          edit.addEventListener('blur', () => finishEdit(todo.id, edit.value));
+          body.appendChild(edit);
+          requestAnimationFrame(() => { edit.focus(); edit.select(); });
+        } else {
+          const span = document.createElement('div');
+          span.className = 'text';
+          span.textContent = todo.text;
+          span.addEventListener('dblclick', () => startEdit(todo.id));
+          body.appendChild(span);
+        }
+
+        if (todo.due) {
+          const { text, cls } = describeDue(todo.due);
+          const due = document.createElement('span');
+          due.className = 'due' + (cls ? ' ' + cls : '');
+          due.textContent = '📅 ' + text;
+          body.appendChild(due);
+        }
+
+        const del = document.createElement('button');
+        del.className = 'icon-btn delete-btn';
+        del.textContent = '✕';
+        del.setAttribute('aria-label', '삭제');
+        del.addEventListener('click', () => remove(todo.id));
+
+        li.append(checkbox, star, body, del);
+        list.appendChild(li);
+      }
+
+      const doneCount = todos.filter(t => t.done).length;
+      empty.textContent = EMPTY_MESSAGES[filter];
+      empty.style.display = visible.length ? 'none' : 'block';
+      clearBtn.disabled = doneCount === 0;
+      summary.textContent = todos.length
+        ? `전체 ${todos.length}개 · 완료 ${doneCount}개`
+        : '';
+    }
+
+    render();
+  </script>
+</body>
+</html>

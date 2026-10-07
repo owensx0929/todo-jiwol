@@ -1,0 +1,2 @@
+Hello, Claude Code!
+Starting today, I'm building a to-do app.
