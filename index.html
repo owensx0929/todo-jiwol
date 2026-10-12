@@ -115,6 +115,16 @@
     }
     .clear-btn:hover:not(:disabled) { color: var(--danger); }
     .clear-btn:disabled { opacity: 0.4; cursor: default; }
+    .search-input {
+      flex: 1;
+      min-width: 120px;
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--text);
+    }
 
     /* 목록 */
     ul { list-style: none; margin: 0; padding: 0; }
@@ -203,6 +213,7 @@
         <button class="tab" role="tab" data-filter="active" aria-selected="false">진행 중</button>
         <button class="tab" role="tab" data-filter="done" aria-selected="false">완료</button>
       </div>
+      <input id="search" class="search-input" type="search" placeholder="🔍 할 일 검색" aria-label="할 일 검색" autocomplete="off">
       <button id="clear-done" class="clear-btn">완료 항목 삭제</button>
     </div>
 
@@ -221,6 +232,7 @@
     let loaded = false;
     let filter = 'all';
     let editingId = null;
+    let query = '';
 
     const form = document.getElementById('add-form');
     const textInput = document.getElementById('new-text');
@@ -232,6 +244,7 @@
     const summary = document.getElementById('summary');
     const clearBtn = document.getElementById('clear-done');
     const tabs = document.querySelectorAll('.tab');
+    const searchInput = document.getElementById('search');
     const errorBox = document.getElementById('error');
 
     const EMPTY_MESSAGES = {
@@ -319,6 +332,12 @@
       });
     });
 
+    // 검색 (필터와 함께 적용, 대소문자 구분 없음)
+    searchInput.addEventListener('input', () => {
+      query = searchInput.value.trim().toLowerCase();
+      render();
+    });
+
     // 완료 항목 한 번에 삭제
     // 화면은 먼저 바꾸고, 저장에 실패하면 Supabase에서 다시 불러와 되돌립니다.
     clearBtn.addEventListener('click', async () => {
@@ -403,6 +422,7 @@
     function render() {
       const visible = todos
         .filter(t => filter === 'all' ? true : filter === 'done' ? t.done : !t.done)
+        .filter(t => !query || t.text.toLowerCase().includes(query))
         .sort(compareTodos);
 
       list.innerHTML = '';
@@ -476,7 +496,9 @@
 
       const doneCount = todos.filter(t => t.done).length;
       const remaining = todos.length - doneCount;
-      empty.textContent = EMPTY_MESSAGES[filter];
+      empty.textContent = query
+        ? `'${searchInput.value.trim()}'와(과) 일치하는 할 일이 없어요.`
+        : EMPTY_MESSAGES[filter];
       empty.style.display = !loaded || visible.length ? 'none' : 'block';
       clearBtn.disabled = doneCount === 0;
       summary.textContent = !loaded
