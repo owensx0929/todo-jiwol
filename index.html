@@ -67,6 +67,7 @@
       color: var(--text);
     }
     .text-input { flex: 1; min-width: 0; }
+    .author-input { flex: 1; min-width: 0; font-size: 0.9rem; padding: 6px 10px; }
     .date-input { font-size: 0.9rem; padding: 6px 10px; }
     input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
     .add-btn {
@@ -140,8 +141,10 @@
       background: var(--bg);
       color: var(--text);
     }
-    .due {
-      display: inline-block;
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
       margin-top: 4px;
       font-size: 0.78rem;
       color: var(--muted);
@@ -189,6 +192,7 @@
       </div>
       <div class="form-row">
         <input id="new-due" class="date-input" type="date" aria-label="마감일">
+        <input id="new-author" class="text-input author-input" type="text" placeholder="작성자 (선택)" aria-label="작성자" autocomplete="off">
         <button type="button" id="new-star" class="star-toggle" aria-pressed="false">☆ 중요</button>
       </div>
     </form>
@@ -222,6 +226,7 @@
     const textInput = document.getElementById('new-text');
     const dueInput = document.getElementById('new-due');
     const starToggle = document.getElementById('new-star');
+    const authorInput = document.getElementById('new-author');
     const list = document.getElementById('list');
     const empty = document.getElementById('empty');
     const summary = document.getElementById('summary');
@@ -254,6 +259,19 @@
       render();
     }
 
+    // 한글 입력 중(조합 중)에 누른 Enter인지 확인합니다.
+    // Safari는 조합이 끝난 뒤 keydown이 와서 isComposing이 false이므로 keyCode 229도 함께 봅니다.
+    function isComposingKey(e) {
+      return e.isComposing || e.keyCode === 229;
+    }
+
+    // 조합 중 Enter로 폼이 제출되면 두 번 추가되거나 마지막 글자가 잘릴 수 있어 막습니다.
+    for (const input of [textInput, authorInput]) {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && isComposingKey(e)) e.preventDefault();
+      });
+    }
+
     // 추가
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -265,6 +283,7 @@
           text,
           due: dueInput.value || null,
           important: starToggle.getAttribute('aria-pressed') === 'true',
+          author: authorInput.value.trim() || null,
         })
         .select()
         .single();
@@ -274,6 +293,7 @@
       }
       errorBox.textContent = '';
       todos.push(data);
+      // 작성자는 다음 할 일에도 그대로 쓰도록 비우지 않습니다.
       textInput.value = '';
       dueInput.value = '';
       setStarToggle(false);
@@ -350,6 +370,17 @@
       return { text: `${label}까지`, cls: '' };
     }
 
+    // 마감일이 가까운 순서, 마감일 없는 것은 맨 아래. 같으면 만든 순서대로.
+    function compareTodos(a, b) {
+      if (a.due !== b.due) {
+        if (!a.due) return 1;
+        if (!b.due) return -1;
+        return a.due < b.due ? -1 : 1;
+      }
+      const byCreated = Date.parse(a.created_at) - Date.parse(b.created_at);
+      return byCreated || a.id - b.id;
+    }
+
     // 수정 모드
     function startEdit(id) {
       editingId = id;
@@ -370,9 +401,9 @@
     }
 
     function render() {
-      const visible = todos.filter(t =>
-        filter === 'all' ? true : filter === 'done' ? t.done : !t.done
-      );
+      const visible = todos
+        .filter(t => filter === 'all' ? true : filter === 'done' ? t.done : !t.done)
+        .sort(compareTodos);
 
       list.innerHTML = '';
       for (const todo of visible) {
@@ -399,6 +430,7 @@
           edit.className = 'edit-input';
           edit.value = todo.text;
           edit.addEventListener('keydown', (e) => {
+            if (isComposingKey(e)) return;
             if (e.key === 'Enter') finishEdit(todo.id, edit.value);
             if (e.key === 'Escape') cancelEdit();
           });
@@ -413,12 +445,23 @@
           body.appendChild(span);
         }
 
-        if (todo.due) {
-          const { text, cls } = describeDue(todo.due);
-          const due = document.createElement('span');
-          due.className = 'due' + (cls ? ' ' + cls : '');
-          due.textContent = '📅 ' + text;
-          body.appendChild(due);
+        if (todo.author || todo.due) {
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          if (todo.author) {
+            const author = document.createElement('span');
+            author.className = 'author';
+            author.textContent = '👤 ' + todo.author;
+            meta.appendChild(author);
+          }
+          if (todo.due) {
+            const { text, cls } = describeDue(todo.due);
+            const due = document.createElement('span');
+            due.className = 'due' + (cls ? ' ' + cls : '');
+            due.textContent = '📅 ' + text;
+            meta.appendChild(due);
+          }
+          body.appendChild(meta);
         }
 
         const del = document.createElement('button');
@@ -432,14 +475,13 @@
       }
 
       const doneCount = todos.filter(t => t.done).length;
+      const remaining = todos.length - doneCount;
       empty.textContent = EMPTY_MESSAGES[filter];
       empty.style.display = !loaded || visible.length ? 'none' : 'block';
       clearBtn.disabled = doneCount === 0;
       summary.textContent = !loaded
         ? '불러오는 중…'
-        : todos.length
-          ? `전체 ${todos.length}개 · 완료 ${doneCount}개`
-          : '';
+        : `남은 할 일 ${remaining}개 · 전체 ${todos.length}개 · 완료 ${doneCount}개`;
     }
 
     render();
