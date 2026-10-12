@@ -163,6 +163,16 @@
     .star-btn.on { color: var(--star); }
     .delete-btn:hover { color: var(--danger); background: var(--danger-soft); }
 
+    .error {
+      color: var(--danger);
+      background: var(--danger-soft);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin: 0 0 12px;
+      font-size: 0.9rem;
+    }
+    .error:empty { display: none; }
+
     .empty { text-align: center; color: var(--muted); padding: 32px 0; }
     .hint { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 16px; }
   </style>
@@ -192,14 +202,19 @@
       <button id="clear-done" class="clear-btn">완료 항목 삭제</button>
     </div>
 
+    <p class="error" id="error" role="alert"></p>
     <ul id="list"></ul>
     <p class="empty" id="empty"></p>
     <p class="hint">할 일을 더블클릭하면 내용을 고칠 수 있어요.</p>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <script>
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
     let todos = [];
-    let nextId = 1;
+    let loaded = false;
     let filter = 'all';
     let editingId = null;
 
@@ -212,6 +227,7 @@
     const summary = document.getElementById('summary');
     const clearBtn = document.getElementById('clear-done');
     const tabs = document.querySelectorAll('.tab');
+    const errorBox = document.getElementById('error');
 
     const EMPTY_MESSAGES = {
       all: '할 일이 없습니다 🎉',
@@ -219,18 +235,45 @@
       done: '완료한 할 일이 없어요.',
     };
 
+    // 오류 표시
+    function showError(message, error) {
+      console.error(message, error);
+      errorBox.textContent = message;
+    }
+
+    // Supabase에서 목록 불러오기
+    async function load() {
+      const { data, error } = await db.from('todos').select('*').order('id');
+      if (error) {
+        showError('할 일을 불러오지 못했어요.', error);
+      } else {
+        todos = data;
+        errorBox.textContent = '';
+      }
+      loaded = true;
+      render();
+    }
+
     // 추가
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = textInput.value.trim();
       if (!text) return;
-      todos.push({
-        id: nextId++,
-        text,
-        done: false,
-        due: dueInput.value || null,
-        important: starToggle.getAttribute('aria-pressed') === 'true',
-      });
+      const { data, error } = await db
+        .from('todos')
+        .insert({
+          text,
+          due: dueInput.value || null,
+          important: starToggle.getAttribute('aria-pressed') === 'true',
+        })
+        .select()
+        .single();
+      if (error) {
+        showError('할 일을 추가하지 못했어요.', error);
+        return;
+      }
+      errorBox.textContent = '';
+      todos.push(data);
       textInput.value = '';
       dueInput.value = '';
       setStarToggle(false);
@@ -257,19 +300,36 @@
     });
 
     // 완료 항목 한 번에 삭제
-    clearBtn.addEventListener('click', () => {
+    // 화면은 먼저 바꾸고, 저장에 실패하면 Supabase에서 다시 불러와 되돌립니다.
+    clearBtn.addEventListener('click', async () => {
+      const doneIds = todos.filter(t => t.done).map(t => t.id);
       todos = todos.filter(t => !t.done);
       render();
+      const { error } = await db.from('todos').delete().in('id', doneIds);
+      if (error) {
+        showError('완료 항목을 삭제하지 못했어요.', error);
+        load();
+      }
     });
 
-    function update(id, changes) {
+    async function update(id, changes) {
       todos = todos.map(t => (t.id === id ? { ...t, ...changes } : t));
       render();
+      const { error } = await db.from('todos').update(changes).eq('id', id);
+      if (error) {
+        showError('변경 내용을 저장하지 못했어요.', error);
+        load();
+      }
     }
 
-    function remove(id) {
+    async function remove(id) {
       todos = todos.filter(t => t.id !== id);
       render();
+      const { error } = await db.from('todos').delete().eq('id', id);
+      if (error) {
+        showError('할 일을 삭제하지 못했어요.', error);
+        load();
+      }
     }
 
     // 날짜 표시
@@ -373,14 +433,17 @@
 
       const doneCount = todos.filter(t => t.done).length;
       empty.textContent = EMPTY_MESSAGES[filter];
-      empty.style.display = visible.length ? 'none' : 'block';
+      empty.style.display = !loaded || visible.length ? 'none' : 'block';
       clearBtn.disabled = doneCount === 0;
-      summary.textContent = todos.length
-        ? `전체 ${todos.length}개 · 완료 ${doneCount}개`
-        : '';
+      summary.textContent = !loaded
+        ? '불러오는 중…'
+        : todos.length
+          ? `전체 ${todos.length}개 · 완료 ${doneCount}개`
+          : '';
     }
 
     render();
+    load();
   </script>
 </body>
 </html>
